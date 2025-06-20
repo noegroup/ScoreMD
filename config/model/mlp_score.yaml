@@ -1,0 +1,8 @@
+mlp_score:
+  _target_: ffdiffusion.models.MLPModelInfo
+  hidden_dims:
+  - 512
+  - 512
+  - 512
+  activation: swish
+  potential: false

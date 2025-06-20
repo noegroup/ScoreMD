@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format-check
+        name: check code formatting
+        entry: pixi run -e lint ruff format --check
+        language: system
+        files: \.py$
+        stages: [pre-commit, manual]
+      - id: ruff-check
+        name: check code style
+        entry: pixi run -e lint ruff check
+        language: system
+        files: \.py$
+        stages: [pre-commit, manual]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace

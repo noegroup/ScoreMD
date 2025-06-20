@@ -1,0 +1,8 @@
+mlp_small_potential:
+  _target_: ffdiffusion.models.MLPModelInfo
+  hidden_dims:
+  - 92
+  - 92
+  - 92
+  activation: swish
+  potential: true

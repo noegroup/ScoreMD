@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - /model/mlp_small_potential
+
+ranged_models:
+  - _target_: ffdiffusion.models.RangedModel
+    model: ${model.mlp_small_potential}
+    range: [1.0, 0.0]

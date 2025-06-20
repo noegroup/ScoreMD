@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - /model/transformer_score
+
+ranged_models:
+  - _target_: ffdiffusion.models.RangedModel
+    model: ${model.transformer_score}
+    range: [1.0, 0.0]
