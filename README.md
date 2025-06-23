@@ -1,5 +1,9 @@
 <h1 align="center">Consistent Sampling and Simulation: Molecular Dynamics with Energy-Based Diffusion Models</h1>
 <p align="center">
+<a href="https://arxiv.org/abs/2506.17139"><img src="https://img.shields.io/badge/arXiv-b31b1b?style=for-the-badge&logo=arxiv" alt="arXiv"/></a>
+<a href="https://github.com/jax-ml/jax"><img src="https://img.shields.io/badge/library-JAX-5f0964?style=for-the-badge" alt="Jax"/></a>
+</p>
+<p align="center">
 A framework for training diffusion models with stable, self-consistent scores near the data distribution.
 </p>
 
