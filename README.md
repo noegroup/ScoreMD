@@ -348,4 +348,12 @@ pixi run train dataset=minipeptides \
 Feel free to open an issue if you encounter any problems or have questions.
 
 # Citation
-
+If you found our work useful please cite
+```
+@article{plainer2025consistent,
+  author = {Plainer, Michael and Wu, Hao and Klein, Leon and G{\"u}nnemann, Stephan and No{\'e}, Frank},
+  title = {Consistent Sampling and Simulation: Molecular Dynamics with Energy-Based Diffusion Models},
+  eprint = {arXiv:2506.17139},
+  year = {2025},
+}
+```
