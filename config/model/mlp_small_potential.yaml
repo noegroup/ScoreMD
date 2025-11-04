@@ -1,5 +1,5 @@
 mlp_small_potential:
-  _target_: ffdiffusion.models.MLPModelInfo
+  _target_: scoremd.models.MLPModelInfo
   hidden_dims:
   - 92
   - 92

@@ -1,3 +1,3 @@
 transformer_potential:
-  _target_: ffdiffusion.models.GraphTransformerModelInfo
+  _target_: scoremd.models.GraphTransformerModelInfo
   dropout: 0.0

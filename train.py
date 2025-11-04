@@ -1,5 +1,6 @@
 from evaluate import EvaluationSettings, evaluate
-from ffdiffusion.utils.file import (
+from scoremd.utils import slurm
+from scoremd.utils.file import (
     get_persistent_storage,
 )  # this should be the very first line so that the .env file is loaded
 import logging
@@ -14,18 +15,18 @@ from hydra.conf import HydraConf, RunDir
 from hydra.core.hydra_config import HydraConfig
 from hydra_zen import builds, zen, store
 from hydra_zen.typing import Builds
-from ffdiffusion.data.preprocess import CenterMolecule
-import ffdiffusion.models as diffusion_models
+from scoremd.data.preprocess import CenterMolecule
+import scoremd.models as diffusion_models
 import wandb as wandb_lib
-from ffdiffusion.data.dataset import ToyDataset, Dataset, MuellerBrownSimulation
-from ffdiffusion.models.mixture import MixtureOfModels
-from ffdiffusion.training import load_and_train, TrainingSchedule
-from ffdiffusion.training.train_state import EmaTrainState
-from ffdiffusion.training.weighting import (
+from scoremd.data.dataset import ToyDataset, Dataset, MuellerBrownSimulation
+from scoremd.models.mixture import MixtureOfModels
+from scoremd.training import load_and_train, TrainingSchedule
+from scoremd.training.train_state import EmaTrainState
+from scoremd.training.weighting import (
     plot_weighting_function,
 )
-from ffdiffusion.utils.hydra import SlurmInitializer, WandbInitializer
-from ffdiffusion.utils.ranges import assert_range_continuity
+from scoremd.utils.hydra import SlurmInitializer, WandbInitializer
+from scoremd.utils.ranges import assert_range_continuity
 from stores import create_dataset_store, create_trainig_schedule_store, create_weighting_store, create_optimizer_store
 
 log = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ def training_routine(
     ],
     checkpoint_options: ocp.CheckpointManagerOptions,
     load_dir: Optional[str],
+    continue_from: Optional[str],
     load_epoch: Optional[int],
     evaluation: EvaluationSettings,
     no_evaluation: bool,
@@ -49,7 +51,33 @@ def training_routine(
     wandb: dict,
 ):
     assert len(ranged_models) > 0, "At least one model is required"
-    out_dir = f"{HydraConfig.get().runtime.output_dir}/out"
+    assert continue_from is None or load_dir is None, "Please specify either load_dir or continue_from, not both."
+
+    base_dir = HydraConfig.get().runtime.output_dir
+
+    if continue_from is None:
+        log.info(f"The unique output directory for this folder is {base_dir}.")
+        model_load_dir = os.path.join(load_dir, "model") if load_dir is not None else None
+    else:
+        continue_from = os.path.abspath(os.path.expanduser(continue_from))
+        if not os.path.exists(continue_from):
+            log.warning(
+                f"Directory {continue_from} does not exist, we will start a new run, but use the specified output directory {continue_from}."
+            )
+        log.info(
+            f"The unique run directory for this folder is {base_dir} (i.e., hydra config will be stored there), however we will continue from {continue_from} and add our results to it."
+        )
+        base_dir = continue_from
+        model_load_dir = os.path.join(continue_from, "model")
+
+    if model_load_dir is not None:
+        if not os.path.exists(model_load_dir):
+            log.warning(
+                f"Model directory {model_load_dir} does not exist, we will start a new run, not loading any models."
+            )
+            model_load_dir = None
+
+    out_dir = os.path.join(base_dir, "out")
     os.makedirs(out_dir, exist_ok=True)
 
     log.info(
@@ -152,6 +180,10 @@ def training_routine(
         wandb_lib.define_metric("train/*", step_metric="train/epoch")
         wandb_lib.define_metric("val/*", step_metric="val/epoch")
 
+    log.info(
+        f"Training for {training_schedule.total()} epochs, which is about {train_data.data.shape[0] // BS * training_schedule.total()} steps"
+    )
+
     state, train_losses, val_losses = load_and_train(
         training_schedule,
         unified_model,
@@ -163,15 +195,16 @@ def training_routine(
         norm_factor,
         key,
         checkpoint_options,
-        os.path.join(HydraConfig.get().runtime.output_dir, "model"),
-        os.path.join(load_dir, "model") if load_dir is not None else None,
+        os.path.join(base_dir, "model"),
+        model_load_dir,
+        continue_from is not None and model_load_dir is not None,
         load_epoch,
         wandb["enabled"],
     )
     log.info("Finished training. Evaluating model...")
 
     for losses, prefix, filename in zip([train_losses, val_losses], ["Training", "Validation"], ["loss", "val_loss"]):
-        if losses is None:
+        if losses is None or len(losses) == 0:
             continue
         plt.figure(clear=True)
         plt.title(f"{prefix} - Loss")
@@ -202,7 +235,7 @@ def training_routine(
         state.ema_params,
         dataset,
         evaluation,
-        BS // num_devices,  # TODO: we could also shard the data in evaluation
+        BS // num_devices,  # This uses only a single GPU for evaluation
         norm_factor,
         wandb["enabled"],
         out_dir,
@@ -226,12 +259,13 @@ if __name__ == "__main__":
             enable_background_delete=True,
         ),
         load_dir=None,
+        continue_from=None,
         load_epoch=None,
         num_devices=None,
         no_evaluation=False,
         evaluation=builds(EvaluationSettings, populate_full_signature=True),
         seed=1,
-        wandb={"enabled": False, "project": "ffdiffusion"},
+        wandb={"enabled": False, "project": "scoremd"},
         zen_meta={"model": None},
         populate_full_signature=True,
         hydra_defaults=[
@@ -245,6 +279,12 @@ if __name__ == "__main__":
         ],
     )
 
+    run_dir_path = "outputs/${dataset.name}/${now:%Y-%m-%d/%H-%M-%S}"
+
+    slurm_job_id = slurm.get_slurm_job_id()
+    if slurm_job_id is not None:
+        run_dir_path += f"-{slurm_job_id}"
+
     store(TrainConfig, name="train")
     store(
         HydraConf(
@@ -252,7 +292,7 @@ if __name__ == "__main__":
                 "wandb": builds(WandbInitializer),
                 "slurm": builds(SlurmInitializer),
             },
-            run=RunDir("outputs/${dataset.name}/${now:%Y-%m-%d/%H-%M-%S}"),
+            run=RunDir(run_dir_path),
         )
     )
 

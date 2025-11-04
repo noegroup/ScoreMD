@@ -4,6 +4,6 @@ defaults:
   - /model/transformer_large_potential
 
 ranged_models:
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model: ${model.transformer_large_potential}
     range: [1.0, 0.0]

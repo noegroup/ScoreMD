@@ -4,12 +4,12 @@ defaults:
   - /model/mlp_potential
 
 ranged_models:
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model: ${model.mlp_potential}
     range: [1.0, 0.6]
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model: ${model.mlp_potential}
     range: [0.6, 0.1]
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model: ${model.mlp_potential}
     range: [0.1, 0]

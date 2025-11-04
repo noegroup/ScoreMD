@@ -1,5 +1,6 @@
 AImplicitUnconstrained/
-storage/
+storage
+models/
 config/wandb/**
 wandb
 

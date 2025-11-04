@@ -1,8 +1,8 @@
 [project]
-description = "Learn the potential with diffusion"
-name = "ffdiffusion"
+description = "A framework for training energy-based diffusion models with stable, self-consistent scores near the data distribution."
+name = "ScoreMD"
 requires-python = "== 3.11.*"
-version = "0.1.0"
+version = "1.0.0"
 
 [build-system]
 build-backend = "hatchling.build"
@@ -13,7 +13,7 @@ channels = ["conda-forge", "pytorch"]
 platforms = ["osx-arm64", "linux-64"]
 
 [tool.pixi.pypi-dependencies]
-ffdiffusion = { path = ".", editable = true }
+scoremd = { path = ".", editable = true }
 bgmol = { git = "https://github.com/noegroup/bgmol.git" }
 bgflow = { git = "https://github.com/noegroup/bgflow.git" }
 jax = "==0.5.2"
@@ -42,6 +42,7 @@ python-dotenv = ">=1.0.1,<2"
 einops = ">=0.8.0,<0.9"
 nglview = ">=3.1.4,<4"
 pandas = ">=2.2.2,<3"
+seaborn = ">=0.13.2,<0.14"
 
 [tool.pixi.target.linux-64.pypi-dependencies]
 jax = { version = "==0.5.2", extras = ["cuda12"] }

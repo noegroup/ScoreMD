@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from ffdiffusion.data.dataset.base import Datapoints
-from ffdiffusion.data.dataset.minipeptide import CGMinipeptideDataset, PeptideDatapoints
+from scoremd.data.dataset.base import Datapoints
+from scoremd.data.dataset.minipeptide import CGMinipeptideDataset, PeptideDatapoints
 from functools import partial
 import logging
 import math
@@ -11,19 +11,20 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 from tqdm import tqdm, trange
-import ffdiffusion.diffusion.classic.sde as sdes
-from ffdiffusion.diffusion.classic.utils import perturb
-from ffdiffusion.diffusion.fp import fp_vp_error
+from scoremd.data.dataset.protein import SingleProteinDataset
+import scoremd.diffusion.classic.sde as sdes
+from scoremd.diffusion.classic.utils import perturb
+from scoremd.diffusion.fp import fp_vp_error
 import wandb as wandb_lib
-from ffdiffusion.data.dataset import ToyDataset, ToyDatasets, Dataset, ALDPDataset, MuellerBrownSimulation
-from ffdiffusion.models.mixture import MixtureOfModels
-from ffdiffusion.rmsd import kabsch_align_many
-from ffdiffusion.simulation import create_langevin_step_function, simulate
-from ffdiffusion.utils.evaluation import helper_metrics_2d, js_divergence
-from ffdiffusion.utils.plots import plot_force_2d, plot_potential_2d, save_parts_of_figure
+from scoremd.data.dataset import ToyDataset, ToyDatasets, Dataset, ALDPDataset, MuellerBrownSimulation
+from scoremd.models.mixture import MixtureOfModels
+from scoremd.rmsd import kabsch_align_many
+from scoremd.simulation import create_langevin_step_function, simulate
+from scoremd.utils.evaluation import helper_metrics_2d, js_divergence
+from scoremd.utils.plots import plot_force_2d, plot_potential_2d, save_parts_of_figure
 from flax.core import FrozenDict
 import numpy as onp
-import ffdiffusion.evaluate.molecules as molecules
+import scoremd.evaluate.molecules as molecules
 import json
 import gc
 
@@ -45,7 +46,9 @@ class EvaluationSettings:
     langevin_dt: Optional[float] = None  # The time step for the langevin simulation, in picoseconds
     max_num_openmm_evaluations: int = 1_000  # The maximum number of openmm calls we do for energy evaluations
     aldp_ensure_start_low_prob: bool = True  # Whether to ensure that one simulation starts in a low probability state
+    aldp_evaluate_forces: bool = True  # Whether to evaluate the forces of the model
     limit_inference_peptides: Optional[Sequence[str]] = None  # If specified, only evaluate on these peptides
+    only_store_results: bool = False  # If this is true, we only store the results with minimal evaluation.
 
 
 def evaluate(
@@ -58,9 +61,10 @@ def evaluate(
     wandb: bool,
     out_dir: str,
 ):
+    sde = sdes.VP()
     BS = orig_BS if evaluation.inference_bs is None else evaluation.inference_bs
     num_langevin_samples = (
-        min(dataset.train.data.shape[0] * 10, 1_000_000)
+        min(dataset.train.data.shape[0], 1_000_000)
         if evaluation.num_langevin_samples is None
         else evaluation.num_langevin_samples
     )
@@ -70,7 +74,7 @@ def evaluate(
         return model.apply(params, x, features, t, training=False, *args, **kwargs)
 
     # define the force function (scaled score)
-    def force(x: jnp.ndarray, features: jnp.ndarray) -> jnp.ndarray:
+    def force(x: jnp.ndarray, features: jnp.ndarray, **kwargs) -> jnp.ndarray:
         return (
             dataset.kbT
             * model.apply(
@@ -132,10 +136,14 @@ def evaluate(
                 "aldp",
                 out_dir,
                 evaluation.seed,
+                only_store_results=evaluation.only_store_results,
             )
-        metrics |= evaluate_forces_aldp(dataset, force, inference_bs, wandb, out_dir)
+
+        if evaluation.aldp_evaluate_forces:
+            metrics |= evaluate_forces_aldp(dataset, force, inference_bs, wandb, out_dir)
+
         if num_langevin_samples > 0:
-            metrics |= simulate_aldp(
+            metrics |= simulate_single_system(
                 dataset.train,
                 dataset,
                 force,
@@ -149,7 +157,9 @@ def evaluate(
                 out_dir,
                 "aldp",
                 evaluation.seed,
+                only_store_results=evaluation.only_store_results,
             )
+
     elif isinstance(dataset, CGMinipeptideDataset):
         inference_bs = BS
 
@@ -186,6 +196,49 @@ def evaluate(
                 wandb,
                 current_out_folder,
                 evaluation.seed,
+                only_store_results=evaluation.only_store_results,
+            )
+    elif isinstance(dataset, SingleProteinDataset):
+        inference_bs = BS
+        num_samples = (
+            min(dataset.train.data.shape[0], 100_000)
+            if evaluation.num_iid_samples is None
+            else evaluation.num_iid_samples
+        )
+        if num_samples > 0:
+            metrics |= evaluate_molecule_samples(
+                dataset,
+                dataset.train.data,
+                dataset.train.data[0].reshape(dataset.sample_shape),
+                None,
+                trained_unnormalized_score,
+                norm_factor,
+                inference_bs,
+                num_samples,
+                None,
+                wandb,
+                dataset.name,
+                out_dir,
+                evaluation.seed,
+                only_store_results=evaluation.only_store_results,
+            )
+
+        if num_langevin_samples > 0:
+            metrics |= simulate_single_system(
+                dataset.train,
+                dataset,
+                force,
+                evaluation.num_parallel_langevin_samples,
+                num_langevin_samples,
+                evaluation.num_langevin_intermediate_steps,
+                evaluation.langevin_dt,
+                evaluation.max_num_openmm_evaluations,
+                False,
+                wandb,
+                out_dir,
+                dataset.name,
+                evaluation.seed,
+                only_store_results=evaluation.only_store_results,
             )
 
     FP_BS = evaluation.fp_inference_bs if evaluation.fp_inference_bs is not None else BS
@@ -197,6 +250,7 @@ def evaluate(
             model,
             params,
             trained_unnormalized_score,
+            sde,
             wandb,
             out_dir,
         )
@@ -230,6 +284,7 @@ def evaluate_fp_loss(
     model: MixtureOfModels,
     params: FrozenDict[str, Any],
     unnormalized_score: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    sde: sdes.VP,
     wandb: bool,
     out_dir: str,
 ) -> dict:
@@ -238,9 +293,6 @@ def evaluate_fp_loss(
 
     vs, ss = [], []
     key = jax.random.PRNGKey(0)
-
-    sde = sdes.VP()
-    log.warning("Hardcoded SDE to VP")
 
     if hasattr(model, "log_q_and_score") and hasattr(model, "log_q"):
 
@@ -391,14 +443,14 @@ def get_samples(
     BS: Optional[int] = None,
     t0: float = 0.0,
 ) -> jnp.ndarray:
-    from ffdiffusion.diffusion.classic.utils import get_times, get_sampler
-    from ffdiffusion.diffusion.classic.solvers import EulerMaruyama
+    from scoremd.diffusion.classic.utils import get_times, get_sampler
+    from scoremd.diffusion.classic.solvers import EulerMaruyama
 
     log.info(f"Generating {shape[0]} samples ...")
 
     updated_shape = shape if BS is None else (BS, *shape[1:])
 
-    log.warning("TODO: Hardcoded SDE, we need to make this configurable")
+    log.warning("Hardcoded SDE to VP, in case you want to change it, also change it here")
     rsde = sdes.VP().reverse(score)
     ts, _ = get_times(num_steps=1000, t0=t0)
     outer_solver = EulerMaruyama(rsde, ts)
@@ -440,9 +492,12 @@ def get_samples(
     if nan_entries.sum() > 0:
         log.warning(f"Found {nan_entries.sum()} NaN entries. Filtering them out...")
 
-    q_samples = q_samples[~nan_entries]
+        q_samples = q_samples[~nan_entries]
     q_samples /= norm_factor
-    q_samples = q_samples[: shape[0]]
+
+    if q_samples.shape[0] > shape[0]:
+        q_samples = q_samples[: shape[0]]
+
     log.info(f"{q_samples.shape[0]} samples remaining")
 
     return q_samples
@@ -512,7 +567,7 @@ def evaluate_toy_dataset(
         plt.close()
 
         if potential_net and dataset.example is ToyDatasets.DoubleWell2D:
-            from ffdiffusion.data.dataset.toy import _double_well_2d_density
+            from scoremd.data.dataset.toy import _double_well_2d_density
 
             (x_min, x_max), (y_min, y_max) = dataset.example.range()
 
@@ -778,10 +833,12 @@ def simulate_mueller_brown(
         # we don't have any features for toy datasets
         return force(x.reshape(1, -1), None).reshape(-1)
 
+    n_steps = 50
     step = jax.jit(
-        create_langevin_step_function(adjusted_force, dataset.mass, dataset.gamma, 50, dataset.dt, dataset.kbT)
+        create_langevin_step_function(adjusted_force, dataset.mass, dataset.gamma, n_steps, dataset.dt, dataset.kbT)
     )
 
+    log.info(f"Simulating {n_samples} MD steps with {n_steps} intermediate steps")
     trajectory, velocities = simulate(starting_point, starting_velocity, step, n_samples, key)
     forces = jnp.array([adjusted_force(x) for x in trajectory])
 
@@ -831,9 +888,9 @@ def simulate_mueller_brown(
     }
 
 
-def simulate_aldp(
+def simulate_single_system(
     datapoints: Datapoints,
-    dataset: ALDPDataset,
+    dataset: ALDPDataset | SingleProteinDataset,
     force: Callable[[jnp.ndarray], jnp.ndarray],
     n_points: int,
     n_samples: int,
@@ -845,6 +902,7 @@ def simulate_aldp(
     out_dir: str,
     prefix: str,
     seed: int,
+    only_store_results: bool = False,
 ) -> dict:
     if datapoints.data.shape[0] < n_points:
         data = jnp.repeat(datapoints.data, n_points, axis=0)
@@ -853,8 +911,8 @@ def simulate_aldp(
 
     initial_positions = data[:n_points]
 
-    if aldp_ensure_start_low_prob:
-        ground_truth_phi, ground_truth_psi = dataset.get_phi_psi(data)
+    if isinstance(dataset, ALDPDataset) and aldp_ensure_start_low_prob:
+        ground_truth_phi, ground_truth_psi = dataset.get_2d_features(data)
         is_low_probability = (
             (ground_truth_phi > 0.0) & (ground_truth_phi < 2.0) & (ground_truth_psi > -2) & (ground_truth_psi < 2)
         )
@@ -882,10 +940,11 @@ def simulate_aldp(
         trajectories,
         velocities,
         max_num_openmm_evaluations,
-        dataset.write_animation,
+        dataset.write_animation if hasattr(dataset, "write_animation") else None,
         wandb,
         prefix,
         out_dir,
+        only_store_results=only_store_results,
     )
 
 
@@ -901,6 +960,7 @@ def simulate_minipeptide(
     wandb: bool,
     out_dir: str,
     seed: int,
+    only_store_results: bool = False,
 ) -> dict:
     os.makedirs(out_dir, exist_ok=True)
 
@@ -957,6 +1017,7 @@ def simulate_minipeptide(
                 wandb,
                 peptide,
                 out_dir,
+                only_store_results=only_store_results,
             )
             i += 1
 
@@ -965,7 +1026,7 @@ def simulate_minipeptide(
 
 
 def evaluate_molecule_samples(
-    dataset: ALDPDataset | CGMinipeptideDataset,
+    dataset: ALDPDataset | CGMinipeptideDataset | SingleProteinDataset,
     ground_truth_samples: jnp.ndarray,
     reference_sample: jnp.ndarray,
     features: Optional[jnp.ndarray],
@@ -973,16 +1034,18 @@ def evaluate_molecule_samples(
     norm_factor: jnp.ndarray,
     inference_bs: int,
     num_samples: int,
-    write_animation: Callable[[jnp.ndarray, str], None],
+    write_animation: Optional[Callable[[jnp.ndarray, str], None]],
     wandb: bool,
     prefix: str,
     out_dir: str,
     seed: int,
+    only_store_results: bool = False,
 ) -> dict:
-    plt.figure(clear=True)
-    dataset.plot_phi_psi(ground_truth_samples, title=f"Histogram {prefix} (ground truth)")
-    plt.savefig(f"{out_dir}/{prefix}_iid_phi_psi_target.png", bbox_inches="tight")
-    plt.close()
+    if not only_store_results:
+        plt.figure(clear=True)
+        dataset.plot_2d(ground_truth_samples, title=f"Histogram {prefix} (ground truth)")
+        plt.savefig(f"{out_dir}/{prefix}_iid_phi_psi_target.png", bbox_inches="tight")
+        plt.close()
 
     sample_shape = (num_samples, dataset.train.data.shape[1])
     q_samples = get_samples(
@@ -996,6 +1059,9 @@ def evaluate_molecule_samples(
     q_samples, _ = kabsch_align_many(q_samples, reference_sample)
     onp.save(f"{out_dir}/{prefix}_iid_samples.npy", q_samples)
     log.info(f"Saved iid samples to {out_dir}/{prefix}_iid_samples.npy")
+
+    if only_store_results:
+        return {}
 
     return molecules.evaluate_iid_samples(
         dataset, ground_truth_samples, q_samples, write_animation, wandb, prefix, out_dir

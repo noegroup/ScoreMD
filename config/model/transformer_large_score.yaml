@@ -1,5 +1,5 @@
 transformer_large_score:
-  _target_: ffdiffusion.models.GraphTransformerModelInfo
+  _target_: scoremd.models.GraphTransformerModelInfo
   hidden_nf: 128
   feature_embedding_dim: 16
   n_layers: 3

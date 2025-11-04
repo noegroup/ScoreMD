@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - /model/transformer_very_large_potential
+
+ranged_models:
+  - _target_: scoremd.models.RangedModel
+    model: ${model.transformer_very_large_potential}
+    range: [1.0, 0.0]

@@ -4,351 +4,101 @@
 <a href="https://colab.research.google.com/drive/1r3DGOpGZgIbx7p_uWbsm0b6iP-kiyU_v"><img src="https://img.shields.io/badge/Colab jax-e37e3d.svg?style=for-the-badge&logo=googlecolab&logoColor=white" alt="JAX Colab"/></a>
 <a href="https://colab.research.google.com/drive/1rbcNDwDduPw5QMulbOC-Pg6xGd4wGjej"><img src="https://img.shields.io/badge/Colab PyTorch-e37e3d.svg?style=for-the-badge&logo=googlecolab&logoColor=white" alt="Colab PyTorch"/></a>
 </p>
+
 <p align="center">
-A framework for training diffusion models with stable, self-consistent scores near the data distribution.
+  <img src="images/anim.gif" style="width: 100%; height: auto; max-width: 100%;"/>
 </p>
+
+<p align="center">
+  <em>Animation showing the two modes of our model: independent sampling by diffusion denoising (left) and molecular dynamics simulation (right).</em>
+</p>
+
+## Overview
+
+This repository contains the complete codebase for training and evaluating energy-based diffusion models for molecular dynamics simulations. Our approach enables a single model to perform both independent sampling via diffusion denoising and continuous molecular dynamics simulations through a Fokker-Planck-based regularization scheme.
+
+## Method
 
 <p align="center">
 <img src="images/main.png" alt="Visualization of the main idea of this paper."/>
 </p>
 
-# Tutorial
+<p align="center">
+  <em>We introduce a Fokker-Planck-based regularization to train an energy-based diffusion model with stable, self-consistent scores near the data distribution. This regularization ensures that the learned score function corresponds to a consistent energy function, enabling the model to perform both generative sampling and accurate energy-estimation.</em>
+</p>
 
-We have implemented a minimal working version of our paper in a notebook with [jax](https://colab.research.google.com/drive/1r3DGOpGZgIbx7p_uWbsm0b6iP-kiyU_v) and [PyTorch](https://colab.research.google.com/drive/1rbcNDwDduPw5QMulbOC-Pg6xGd4wGjej). It can be used to create a simular figure to what you can see above, and also do molecular dynamics (MD) simulation with a diffusion model on the Müller-Brown potential.
-If you don't have a strong opinion, use the jax version, as it is much faster and closer to the implementation found in this repository. 
+## Tutorial
+
+We provide minimal working implementations in Jupyter notebooks:
+- **[JAX version](https://colab.research.google.com/drive/1r3DGOpGZgIbx7p_uWbsm0b6iP-kiyU_v)** (recommended) - Faster and closer to this repository's implementation
+- **[PyTorch version](https://colab.research.google.com/drive/1rbcNDwDduPw5QMulbOC-Pg6xGd4wGjej)** - Alternative implementation
+
+Both notebooks demonstrate how to reproduce similar figures to the one shown above and perform molecular dynamics simulations with a diffusion model on the Müller-Brown potential. 
 
 # 🚀 Getting Started
 
-All dependencies are managed with [pixi](https://github.com/prefix-dev/pixi), ensuring fully reproducible environments.
-To set up the environment, simply run:
+## Installation
+
+All dependencies are managed with [pixi](https://github.com/prefix-dev/pixi), which ensures fully reproducible environments across different systems.
+
+To set up the environment, run:
 
 ```bash
 pixi install --frozen
 ```
 
-Prefer using your own toolchain like conda?
-Check out our `pyproject.toml` and install the dependencies with your preferred tool.
-In that case, replace `pixi run` with standard Python execution, for example:
 
+To activate the environment, run:
 ```bash
-python train.py
+pixi shell
 ```
 
-## Training & Evaluation
+### Alternative Installation Methods
 
-We use Hydra for configuration management. You can override any config via command-line arguments or config files.
+If you prefer using your own dependency manager (e.g., conda, pip), you can install the dependencies listed in `pyproject.toml` with your preferred tool.
 
-### Example: Toy Systems
+
+## Quick Start: Toy Systems
+
+We use [Hydra](https://hydra.cc/) for configuration management. You can override any configuration via command-line arguments or configuration files.
 
 Train on example toy systems using the provided configurations:
 
 ```bash
-pixi run train dataset=double_well +architecture=mlp/small_score
-pixi run train dataset=double_well_2d +architecture=mlp/small_score
+python train.py dataset=double_well +architecture=mlp/small_potential
+python train.py dataset=double_well_2d +architecture=mlp/small_potential
 ```
 
 Outputs will be saved to the `outputs/` directory.
 
-# 📄 Reproducing Paper Results
-Below, we list the exact commands used to generate the main results from the paper.
-Note that in this version of the repository, we use slightly different names for the parameters, e.g., we use $\beta$ instead of $\alpha$ for the regularization strength.
+# 🧬 Working with Molecules
+> [!IMPORTANT]
+> This repository does **not** contain all datasets directly.
+> Training data for the toy systems and alanine dipeptide will be downloaded automatically. 
+> For the dipeptides, you can download the dataset from [this release](https://github.com/noegroup/ScoreMD/releases/tag/1.0.0) and place it into the `./storage` directory (one subfolder for each dataset, e.g. `./storage/minipeptides/`, `./storage/deshaw/`).
+> Data for the fast-folder systems can be requested from D. E. Shaw Research, as described in the [original paper](https://www.science.org/doi/full/10.1126/science.1208351).
+> If you do not have access to the fast-folder data, [this release](https://github.com/noegroup/ScoreMD/releases/tag/1.0.0) also provides dummy data generated by our models, which is sufficient for inference.
 
-## Müller-Brown Potential
+## Running Inference with Pre-Trained Models
 
-### Baseline Model
+We provide pre-trained model weights for all models presented in the paper. For detailed instructions on downloading and using these models, please refer to [INFERENCE.md](INFERENCE.md).
 
-```bash
-pixi run train dataset=mueller_brown +architecture=mlp/small_potential \
-  training_schedule.epochs=180 \
-  training_schedule.losses.0.time_weighting.midpoint=0.5
-```
+## Training Models from the Paper
 
-### Mixture of Experts
+To reproduce the results from our paper, see [TRAIN.md](TRAIN.md) for the exact training commands used for each model and dataset. 
 
-```bash
-pixi run train dataset=mueller_brown +architecture=mlp/small_mixture_fair \
-  weighting_function=ranged \
-  training_schedule=vp_three_models \
-  training_schedule.epochs.0=30 \
-  training_schedule.epochs.1=30 \
-  training_schedule.epochs.2=120 \
-  training_schedule.losses.2.time_weighting.midpoint=0.05
-```
+## Evaluation and Plotting Scripts
 
-### Fokker-Planck Regularization
+For implementation details and benchmarking against your own methods, we provide evaluation scripts in the [evaluation](evaluation/README.md) directory.
 
-```bash
-pixi run train dataset=mueller_brown +architecture=mlp/small_potential \
-  training_schedule.epochs=180 \
-  training_schedule.losses.0.loss.div_est=2 \
-  training_schedule.losses.0.loss.beta=0.0005 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  training_schedule.losses.0.time_weighting.midpoint=0.5
-```
+# Contributing
 
-### Both (Mixture + Fokker-Planck)
-
-```bash
-pixi run train dataset=mueller_brown +architecture=mlp/small_mixture_fair \
-  weighting_function=ranged \
-  training_schedule=vp_three_models \
-  training_schedule.losses.2.loss.div_est=2 \
-  training_schedule.losses.2.loss.beta=0.0005 \
-  +training_schedule.losses.2.loss.residual_fp=True \
-  training_schedule.losses.2.loss.partial_t_approx=True \
-  +training_schedule.losses.2.loss.single_gamma=True \
-  training_schedule.epochs.0=30 \
-  training_schedule.epochs.1=30 \
-  training_schedule.epochs.2=120 \
-  training_schedule.losses.2.time_weighting.midpoint=0.05
-```
-
-## Alanine Dipeptide
-
-### Baseline Model
-```bash
-pixi run train dataset=aldp \
-  dataset.limit_samples=50_000 \
-  dataset.validation=False \
-  +architecture=transformer/potential \
-  training_schedule.epochs.0=10000 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=1000 \
-  training_schedule.losses.0.loss.alpha=0 \
-  training_schedule.losses.0.loss.beta=0 \
-  +training_schedule/augment=random_rotations \
-  dataset.coarse_graining_level=full \
-  evaluation.num_parallel_langevin_samples=100 \
-  evaluation.langevin_dt=2e-3 \
-  evaluation.num_langevin_intermediate_steps=50 \
-  evaluation.num_langevin_samples=120000 \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.0.loss.div_est=2 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  wandb.enabled=True \
-  +wandb.name=aldp-baseline
-```
-
-### Mixture
-```bash
-pixi run train dataset=aldp \
-  dataset.limit_samples=50_000 \
-  dataset.validation=False \
-  training_schedule=vp_three_models \
-  +architecture=transformer/score_score_potential \
-  weighting_function=ranged \
-  training_schedule.epochs.0=1000 \
-  training_schedule.epochs.1=2000 \
-  training_schedule.epochs.2=7000 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=100000 \
-  training_schedule.losses.2.loss.alpha=0 \
-  +training_schedule/augment=random_rotations \
-  dataset.coarse_graining_level=full \
-  evaluation.num_parallel_langevin_samples=100 \
-  evaluation.langevin_dt=2e-3 \
-  evaluation.num_langevin_intermediate_steps=50 \
-  evaluation.num_langevin_samples=120000 \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.2.loss.div_est=2 \
-  +training_schedule.losses.2.loss.residual_fp=True \
-  training_schedule.losses.2.loss.partial_t_approx=True \
-  +training_schedule.losses.2.loss.single_gamma=True \
-  training_schedule.losses.2.loss.beta=0 \
-  training_schedule.losses.2.time_weighting.midpoint=0.03 \
-  wandb.enabled=True \
-  +wandb.name=aldp-mixture
-```
-
-### Fokker-Planck
-```bash
-pixi run train dataset=aldp \
-  dataset.limit_samples=50_000 \
-  dataset.validation=False \
-  +architecture=transformer/potential \
-  training_schedule.epochs.0=10000 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=1000 \
-  training_schedule.losses.0.loss.alpha=0 \
-  training_schedule.losses.0.loss.beta=0.0005 \
-  +training_schedule/augment=random_rotations \
-  dataset.coarse_graining_level=full \
-  evaluation.num_parallel_langevin_samples=100 \
-  evaluation.langevin_dt=2e-3 \
-  evaluation.num_langevin_intermediate_steps=50 \
-  evaluation.num_langevin_samples=120000 \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.0.loss.div_est=2 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  wandb.enabled=True \
-  +wandb.name=aldp-fp-0.0005
-```
-
-### Both (Mixture + Fokker-Planck)
-```bash
-pixi run train dataset=aldp \
-  dataset.limit_samples=50_000 \
-  dataset.validation=False \
-  training_schedule=vp_three_models \
-  +architecture=transformer/score_score_potential \
-  weighting_function=ranged \
-  training_schedule.epochs.0=1000 \
-  training_schedule.epochs.1=2000 \
-  training_schedule.epochs.2=7000 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=100000 \
-  training_schedule.losses.2.loss.alpha=0 \
-  +training_schedule/augment=random_rotations \
-  dataset.coarse_graining_level=full \
-  evaluation.num_parallel_langevin_samples=100 \
-  evaluation.langevin_dt=2e-3 \
-  evaluation.num_langevin_intermediate_steps=50 \
-  evaluation.num_langevin_samples=120000 \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.2.loss.div_est=2 \
-  +training_schedule.losses.2.loss.residual_fp=True \
-  training_schedule.losses.2.loss.partial_t_approx=True \
-  +training_schedule.losses.2.loss.single_gamma=True \
-  training_schedule.losses.2.loss.beta=0.0001 \
-  training_schedule.losses.2.time_weighting.midpoint=0.03 \
-  wandb.enabled=True \
-  +wandb.name=aldp-both-fp-0.0001
-```
-
-## Minipeptides
-### Baseline
-```bash
-pixi run train dataset=minipeptides \
-  +architecture=transformer/large_potential \
-  training_schedule.epochs=120 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=10 \
-  +training_schedule/augment=random_rotations \
-  evaluation.inference_bs=1024 \
-  evaluation.fp_inference_bs=256 \
-  "evaluation.limit_inference_peptides=[KA, RP]" \
-  training_schedule.losses.0.loss.beta=0.000 \
-  training_schedule.losses.0.loss.div_est=2 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  evaluation.eval_t=1e-5 \
-  wandb.enabled=True \
-  +wandb.name=minipeptide-baseline
-```
-
-### Mixture
-```bash
-pixi run train dataset=minipeptides \
-  training_schedule=vp_three_models \
-  +architecture=transformer/score_score_large_potential \
-  weighting_function=ranged \
-  training_schedule.epochs.0=10 \
-  training_schedule.epochs.1=20 \
-  training_schedule.epochs.2=100 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=10000 \
-  +training_schedule/augment=random_rotations \
-  evaluation.inference_bs=1024 \
-  evaluation.fp_inference_bs=256 \
-  "evaluation.limit_inference_peptides=[KA, RP]" \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.2.loss.div_est=2 \
-  +training_schedule.losses.2.loss.residual_fp=True \
-  training_schedule.losses.2.loss.partial_t_approx=True \
-  +training_schedule.losses.2.loss.single_gamma=True \
-  training_schedule.losses.2.loss.beta=0.000 \
-  training_schedule.losses.2.time_weighting.midpoint=0.03 \
-  wandb.enabled=True \
-  +wandb.name=minipeptide-mixture
-```
-
-### Fokker-Planck
-```bash
-pixi run train dataset=minipeptides \
-  +architecture=transformer/large_potential \
-  training_schedule.epochs=120 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=10 \
-  +training_schedule/augment=random_rotations \
-  evaluation.inference_bs=1024 \
-  evaluation.fp_inference_bs=256 \
-  "evaluation.limit_inference_peptides=[KA, RP]" \
-  training_schedule.losses.0.loss.beta=0.0005 \
-  training_schedule.losses.0.loss.div_est=2 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  wandb.enabled=True \
-  +wandb.name=minipeptide-fp-0.0005
-```
-
-### Both (Mixture + Fokker-Planck)
-```bash
-pixi run train dataset=minipeptides \
-  training_schedule=vp_three_models \
-  +architecture=transformer/score_score_large_potential \
-  weighting_function=ranged \
-  training_schedule.epochs.0=10 \
-  training_schedule.epochs.1=20 \
-  training_schedule.epochs.2=100 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=10000 \
-  +training_schedule/augment=random_rotations \
-  evaluation.inference_bs=1024 \
-  evaluation.fp_inference_bs=256 \
-  "evaluation.limit_inference_peptides=[KA, RP]" \
-  evaluation.eval_t=1e-5 \
-  training_schedule.losses.2.loss.div_est=2 \
-  +training_schedule.losses.2.loss.residual_fp=True \
-  training_schedule.losses.2.loss.partial_t_approx=True \
-  +training_schedule.losses.2.loss.single_gamma=True \
-  training_schedule.losses.2.loss.beta=0.0001 \
-  training_schedule.losses.2.time_weighting.midpoint=0.03 \
-  wandb.enabled=True \
-  +wandb.name=minipeptide-both-fp-0.0001
-```
-
-## Example Inference on Testste
-For the minipeptides, the training script can also be used for evaluation on the test set. For that, set the validation set to the test set and use `load_dir`.
-
-```bash
-pixi run train dataset=minipeptides \
-  +architecture=transformer/large_potential \
-  training_schedule.epochs=120 \
-  training_schedule.BS=1024 \
-  checkpoint_options.save_interval_steps=10 \
-  +training_schedule/augment=random_rotations \
-  evaluation.inference_bs=1024 \
-  evaluation.fp_inference_bs=256 \
-  training_schedule.losses.0.loss.beta=0.000 \
-  training_schedule.losses.0.loss.div_est=2 \
-  +training_schedule.losses.0.loss.residual_fp=True \
-  training_schedule.losses.0.loss.partial_t_approx=True \
-  +training_schedule.losses.0.loss.single_gamma=True \
-  evaluation.eval_t=1e-5 \
-  "dataset.val_path=./storage/minipeptides/test.npy" \
-  "evaluation.limit_inference_peptides=[KS, KG, AT, LW, KQ, NY, IM, TD, HT, NF, RL, ET, AC, RV, HP, AP]" \
-  evaluation.num_parallel_langevin_samples=10 \
-  evaluation.num_langevin_intermediate_steps=50 \
-  evaluation.num_langevin_samples=120000 \
-  evaluation.num_iid_samples=100000 \
-  load_dir=./outputs/minipeptides/DATE/TIME
-  wandb.enabled=True \
-  +wandb.name=minipeptide-test
-```
-
-# Contribution
 Feel free to open an issue if you encounter any problems or have questions.
 
 # Citation
-If you found our work useful please cite
+
+If you find our work useful, please cite:
+
 ```
 @article{plainer2025consistent,
   author = {Plainer, Michael and Wu, Hao and Klein, Leon and G{\"u}nnemann, Stephan and No{\'e}, Frank},

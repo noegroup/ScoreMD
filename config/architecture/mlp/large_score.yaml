@@ -4,6 +4,6 @@ defaults:
   - /model/mlp_score
 
 ranged_models:
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model: ${model.mlp_score}
     range: [1.0, 0.0]

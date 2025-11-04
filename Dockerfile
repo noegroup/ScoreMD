@@ -37,8 +37,8 @@ RUN mkdir -p ${PIXI_HOME} ${PIXI_ENVIRONMENT}
 RUN echo "detached-environments = \"${PIXI_ENVIRONMENT}\"" > ${PIXI_HOME}/config.toml
 
 # This is a hack because pixi tries to install the editable dependencies
-RUN mkdir -p src/ffdiffusion
-RUN touch src/ffdiffusion/__init__.py
+RUN mkdir -p src/scoremd
+RUN touch src/scoremd/__init__.py
 
 # Install dependencies
 RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \

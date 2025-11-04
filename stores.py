@@ -1,25 +1,28 @@
 from hydra_zen import builds, just
 
-from ffdiffusion.data.augment import apply_random_rotations
-from ffdiffusion.data.dataset.aldp import ALDPDataset
-from ffdiffusion.data.dataset.minipeptide import CGMinipeptideDataset
-from ffdiffusion.data.dataset.mueller import MuellerBrownSimulation
-from ffdiffusion.data.dataset.toy import ToyDataset, ToyDatasets
-import ffdiffusion.diffusion.classic.utils as diffusion_utils
+from scoremd.data.augment import apply_random_rotations
+from scoremd.data.dataset.aldp import ALDPDataset, CoarseGrainingLevel
+from scoremd.data.dataset.minipeptide import CGMinipeptideDataset
+from scoremd.data.dataset.mueller import MuellerBrownSimulation
+from scoremd.data.dataset.protein import SingleProteinDataset
+from scoremd.data.dataset.toy import ToyDataset, ToyDatasets
+import scoremd.diffusion.classic.utils as diffusion_utils
 
 # import straight line diffusion loss
-from ffdiffusion.loss import RangedLoss
-from ffdiffusion.training import equal_weight, exponential_decay
-from ffdiffusion.training.optimizer import get_constant_lr_optimizer, get_cosine_lr_optimizer
-from ffdiffusion.training.schedule import IDENTITY, OneAfterAnother
-from ffdiffusion.training.weighting import (
+from scoremd.loss import RangedLoss
+from scoremd.training import equal_weight, exponential_decay
+from scoremd.training.optimizer import get_constant_lr_optimizer, get_cosine_lr_optimizer
+from scoremd.training.schedule import IDENTITY, OneAfterAnother
+from scoremd.training.weighting import (
     construct_global_constant_weighting_function,
     construct_ranged_constant_weighting_function,
 )
-from ffdiffusion.utils.file import get_persistent_storage
+from scoremd.utils.file import get_persistent_storage
 
 
 def create_dataset_store(store):
+    base_dir = get_persistent_storage()
+
     dataset_store = store(group="dataset")
 
     ToyDatasetBuilder = builds(ToyDataset, n_samples=10_000, populate_full_signature=True)
@@ -45,19 +48,47 @@ def create_dataset_store(store):
         name="aldp_single",
     )
 
-    base_dir = get_persistent_storage()
+    dataset_store(
+        builds(
+            ALDPDataset,
+            name="aldp_six",
+            path=f"{base_dir}/aldp/CG_300k_100kx1ps.npy",
+            coarse_graining_level=CoarseGrainingLevel.SIX_BEADS,
+            validation=False,
+            populate_full_signature=True,
+        ),
+        name="aldp_six",
+    )
+
     dataset_store(
         builds(
             CGMinipeptideDataset,
             pdb_directory=f"{base_dir}/minipeptides/pdbs",
             train_path=f"{base_dir}/minipeptides/train.npy",
             val_path=f"{base_dir}/minipeptides/val.npy",
-            # test_path=f"{base_dir}/minipeptides/test.npy",
+            # test_path=f"{base_dir}/minipeptides/test.npy",  # intentionally left out, so that normally it evaluates on validation set
             name="minipeptides",
             populate_full_signature=True,
         ),
         name="minipeptides",
     )
+
+    def generate_protein_dataset(name, file_names, tica_file_name, topology_file_name):
+        dataset_store(
+            builds(
+                SingleProteinDataset,
+                paths=[f"{base_dir}/deshaw/{file_name}" for file_name in file_names],
+                tica_path=f"{base_dir}/deshaw/{tica_file_name}",
+                topology_path=f"{base_dir}/deshaw/{topology_file_name}",
+                name=name,
+                populate_full_signature=True,
+            ),
+            name=name,
+        )
+
+    generate_protein_dataset("chignolin", ["chignolin-0_ca.h5"], "chignolin_tica.pic", "chignolin.pdb")
+    generate_protein_dataset("trpcage", ["trpcage-0_ca.h5"], "trpcage_tica.pic", "trpcage.pdb")
+    generate_protein_dataset("bba", ["bba-0_ca.h5", "bba-1_ca.h5"], "bba_tica.pic", "bba.pdb")
 
     return dataset_store
 

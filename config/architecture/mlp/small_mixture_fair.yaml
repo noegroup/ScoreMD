@@ -2,27 +2,27 @@
 
 # has (basically) the same number of parameters as small_potential
 ranged_models:
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model:
-      _target_: ffdiffusion.models.MLPModelInfo
+      _target_: scoremd.models.MLPModelInfo
       hidden_dims:
         - 54
         - 54
       activation: swish
       potential: true
     range: [1.0, 0.6]
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model:
-      _target_: ffdiffusion.models.MLPModelInfo
+      _target_: scoremd.models.MLPModelInfo
       hidden_dims:
         - 64
         - 64
       activation: swish
       potential: true
     range: [0.6, 0.1]
-  - _target_: ffdiffusion.models.RangedModel
+  - _target_: scoremd.models.RangedModel
     model:
-      _target_: ffdiffusion.models.MLPModelInfo
+      _target_: scoremd.models.MLPModelInfo
       hidden_dims:
         - 64
         - 64
