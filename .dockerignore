@@ -1,0 +1,14 @@
+.pixi/
+outputs/
+multirun/
+images/
+storage/
+.hydra/
+wandb/
+__pycache__/
+*.pt
+*.pth
+*.ckpt
+*.log
+*.tmp
+.DS_Store

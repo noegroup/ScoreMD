@@ -39,6 +39,7 @@ Both notebooks demonstrate how to reproduce similar figures to the one shown abo
 
 ## Installation
 
+### pixi
 All dependencies are managed with [pixi](https://github.com/prefix-dev/pixi), which ensures fully reproducible environments across different systems.
 
 To set up the environment, run:
@@ -51,6 +52,19 @@ pixi install --frozen
 To activate the environment, run:
 ```bash
 pixi shell
+```
+
+### Docker
+If you are on an amd64 system (e.g. a Linux machine), you can use the docker image to run the code. To build the docker image, run:
+
+```bash
+docker build -t scoremd .
+```
+
+To run the docker container, run:
+
+```bash
+docker run -it --rm -v $(pwd)/outputs:/workspace/outputs -v $(pwd)/storage:/workspace/storage -v $(pwd)/multirun:/workspace/multirun scoremd python train.py ...
 ```
 
 ### Alternative Installation Methods
