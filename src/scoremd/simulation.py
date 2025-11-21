@@ -8,7 +8,7 @@ def create_langevin_step_function(
 ) -> Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
     """
     Implementation of this function is based on the Langevin integrator in OpenMM.
-    http://docs.openmm.org/latest/userguide/theory/04_integrators.html#langevinintegator
+    http://docs.openmm.org/8.2.0/userguide/theory/04_integrators.html#langevinintegator
 
     Args:
         force: A function defining the forces acting on the system. It takes the current positions and returns the forces.
@@ -33,7 +33,7 @@ def create_langevin_step_function(
         assert x.shape == v.shape, f"Position and velocity should have the same shape. Shape {x.shape} != {v.shape}."
         alpha = jnp.exp(-gamma * dt)
         f_scale = (1 - alpha) / gamma
-        new_v_det = alpha * v + f_scale * force(x, **kwargs) / mass / gamma
+        new_v_det = alpha * v + f_scale * force(x, **kwargs) / mass
         new_v = new_v_det + jnp.sqrt(kbT * (1 - alpha**2) / mass) * jax.random.normal(key, x.shape)
 
         return x + dt * new_v, new_v
