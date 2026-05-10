@@ -1,6 +1,7 @@
 <h1 align="center">Consistent Sampling and Simulation: Molecular Dynamics with Energy-Based Diffusion Models</h1>
 <p align="center">
 <a href="https://arxiv.org/abs/2506.17139"><img src="https://img.shields.io/badge/arXiv-b31b1b?style=for-the-badge&logo=arxiv" alt="arXiv"/></a>
+<a href="https://papers.nips.cc/paper_files/paper/2025/hash/231be94eaf8dcbc49a95b256c9b6b8b5-Abstract-Conference.html"><img src="https://img.shields.io/badge/NeurIPS-4f2d4e?style=for-the-badge" alt="NeurIPS"/></a>
 <a href="https://colab.research.google.com/drive/1r3DGOpGZgIbx7p_uWbsm0b6iP-kiyU_v"><img src="https://img.shields.io/badge/Colab jax-e37e3d.svg?style=for-the-badge&logo=googlecolab&logoColor=white" alt="JAX Colab"/></a>
 <a href="https://colab.research.google.com/drive/1rbcNDwDduPw5QMulbOC-Pg6xGd4wGjej"><img src="https://img.shields.io/badge/Colab PyTorch-e37e3d.svg?style=for-the-badge&logo=googlecolab&logoColor=white" alt="Colab PyTorch"/></a>
 </p>
@@ -114,10 +115,14 @@ Feel free to open an issue if you encounter any problems or have questions.
 If you find our work useful, please cite:
 
 ```
-@article{plainer2025consistent,
+@inproceedings{plainer2025consistent,
   author = {Plainer, Michael and Wu, Hao and Klein, Leon and G{\"u}nnemann, Stephan and No{\'e}, Frank},
   title = {Consistent Sampling and Simulation: Molecular Dynamics with Energy-Based Diffusion Models},
-  eprint = {arXiv:2506.17139},
+  booktitle = {Advances in Neural Information Processing Systems},
+  editor = {Belgrave, D. and Zhang, C. and Lin, H. and Pascanu, R. and Koniusz, P. and Ghassemi, M. and Chen, N.},
+  pages = {24460--24505},
+  publisher = {Curran Associates, Inc.},
+  volume = {38},
   year = {2025},
 }
 ```
